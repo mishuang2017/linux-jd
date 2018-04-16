@@ -2484,7 +2484,8 @@ void tcf_exts_destroy(struct tcf_exts *exts)
 EXPORT_SYMBOL(tcf_exts_destroy);
 
 int tcf_exts_validate(struct net *net, struct tcf_proto *tp, struct nlattr **tb,
-		      struct nlattr *rate_tlv, struct tcf_exts *exts, bool ovr)
+		      struct nlattr *rate_tlv, struct tcf_exts *exts, bool ovr,
+		      bool rtnl_held)
 {
 #ifdef CONFIG_NET_CLS_ACT
 	{
@@ -2494,7 +2495,7 @@ int tcf_exts_validate(struct net *net, struct tcf_proto *tp, struct nlattr **tb,
 		if (exts->police && tb[exts->police]) {
 			act = tcf_action_init_1(net, tp, tb[exts->police],
 						rate_tlv, "police", ovr,
-						TCA_ACT_BIND, true);
+						TCA_ACT_BIND, rtnl_held);
 			if (IS_ERR(act))
 				return PTR_ERR(act);
 
@@ -2506,7 +2507,8 @@ int tcf_exts_validate(struct net *net, struct tcf_proto *tp, struct nlattr **tb,
 
 			err = tcf_action_init(net, tp, tb[exts->action],
 					      rate_tlv, NULL, ovr, TCA_ACT_BIND,
-					      exts->actions, &attr_size, true);
+					      exts->actions, &attr_size,
+					      rtnl_held);
 			if (err < 0)
 				return err;
 			exts->nr_actions = err;
