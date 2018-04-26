@@ -28,8 +28,11 @@
 #include <net/dst.h>
 #include <net/dst_metadata.h>
 
+#include <net/netfilter/nf_conntrack_core.h>
+
 struct fl_flow_key {
 	int	indev_ifindex;
+	u8	ct_state;
 	struct flow_dissector_key_control control;
 	struct flow_dissector_key_control enc_control;
 	struct flow_dissector_key_basic basic;
@@ -182,6 +185,26 @@ static struct cls_fl_filter *fl_lookup(struct fl_flow_mask *mask,
 				      mask->filter_ht_params);
 }
 
+static u8 fl_ct_get_state(enum ip_conntrack_info ctinfo)
+{
+	u8 ct_state = TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
+
+	switch (ctinfo) {
+	case IP_CT_ESTABLISHED:
+	case IP_CT_ESTABLISHED_REPLY:
+		ct_state |= TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
+		break;
+	case IP_CT_NEW:
+		ct_state |= TCA_FLOWER_KEY_CT_FLAGS_NEW;
+		break;
+	default:
+		printk("[yk] fl_ct_get_state: ctinfo %d not supported\n", ctinfo);
+		break;
+	}
+
+	return ct_state;
+}
+
 static int fl_classify(struct sk_buff *skb, const struct tcf_proto *tp,
 		       struct tcf_result *res)
 {
@@ -190,6 +213,8 @@ static int fl_classify(struct sk_buff *skb, const struct tcf_proto *tp,
 	struct fl_flow_mask *mask;
 	struct fl_flow_key skb_key;
 	struct fl_flow_key skb_mkey;
+	enum ip_conntrack_info ctinfo;
+	struct nf_conn *ct;
 
 	list_for_each_entry_rcu(mask, &head->masks, list) {
 		fl_clear_masked_range(&skb_key, mask);
@@ -198,6 +223,9 @@ static int fl_classify(struct sk_buff *skb, const struct tcf_proto *tp,
 		/* skb_flow_dissect() does not set n_proto in case an unknown
 		 * protocol, so do it rather here.
 		 */
+		ct = nf_ct_get(skb, &ctinfo);
+		if (ct)
+			skb_key.ct_state = fl_ct_get_state(ctinfo);
 		skb_key.basic.n_proto = skb->protocol;
 		skb_flow_dissect_tunnel_info(skb, &mask->dissector, &skb_key);
 		skb_flow_dissect(skb, &mask->dissector, &skb_key, 0);
@@ -475,6 +503,8 @@ static const struct nla_policy fl_policy[TCA_FLOWER_MAX + 1] = {
 	[TCA_FLOWER_KEY_ENC_IP_TOS_MASK] = { .type = NLA_U8 },
 	[TCA_FLOWER_KEY_ENC_IP_TTL]	 = { .type = NLA_U8 },
 	[TCA_FLOWER_KEY_ENC_IP_TTL_MASK] = { .type = NLA_U8 },
+	[TCA_FLOWER_KEY_CT_STATE]	= { .type = NLA_U8 },
+	[TCA_FLOWER_KEY_CT_STATE_MASK]	= { .type = NLA_U8 },
 };
 
 static void fl_set_key_val(struct nlattr **tb,
@@ -606,6 +636,11 @@ static int fl_set_key(struct net *net, struct nlattr **tb,
 		mask->indev_ifindex = 0xffffffff;
 	}
 #endif
+
+	if (tb[TCA_FLOWER_KEY_CT_STATE]) {
+		key->ct_state = nla_get_u8(tb[TCA_FLOWER_KEY_CT_STATE]);
+		mask->ct_state = nla_get_u8(tb[TCA_FLOWER_KEY_CT_STATE_MASK]);
+	}
 
 	fl_set_key_val(tb, key->eth.dst, TCA_FLOWER_KEY_ETH_DST,
 		       mask->eth.dst, TCA_FLOWER_KEY_ETH_DST_MASK,
@@ -1396,6 +1431,12 @@ static int fl_dump_key(struct sk_buff *skb, struct net *net,
 		dev = __dev_get_by_index(net, key->indev_ifindex);
 		if (dev && nla_put_string(skb, TCA_FLOWER_INDEV, dev->name))
 			goto nla_put_failure;
+	}
+
+	if (mask->ct_state) {
+		fl_dump_key_val(skb, &key->ct_state, TCA_FLOWER_KEY_CT_STATE,
+			    &mask->ct_state, TCA_FLOWER_KEY_CT_STATE_MASK,
+			    sizeof(key->ct_state));
 	}
 
 	if (fl_dump_key_val(skb, key->eth.dst, TCA_FLOWER_KEY_ETH_DST,
