@@ -756,6 +756,8 @@ int ovs_flow_key_extract(const struct ip_tunnel_info *tun_info,
 	key->ovs_flow_hash = 0;
 	key->recirc_id = 0;
 
+	key->recirc_id = skb->tc_recirc_id;
+	printk(KERN_ERR "%s %d %s @@ key->recirc_id %d\n", __FILE__, __LINE__, __func__, key->recirc_id);
 	return key_extract(skb, key);
 }
 
