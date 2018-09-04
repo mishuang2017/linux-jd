@@ -37,7 +37,7 @@ union nf_conntrack_proto {
 
 union nf_conntrack_expect_proto {
 	/* insert expect proto private data here */
-};
+	};
 
 #include <linux/types.h>
 #include <linux/skbuff.h>
