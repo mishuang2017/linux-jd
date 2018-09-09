@@ -295,7 +295,9 @@ static void fl_hw_destroy_filter(struct tcf_proto *tp, struct cls_fl_filter *f)
 
 	tc_setup_cb_call(block, &f->exts, TC_SETUP_CLSFLOWER,
 			 &cls_flower, false);
+	spin_lock(&tp->lock);
 	tcf_block_offload_dec(block, &f->flags);
+	spin_unlock(&tp->lock);
 }
 
 static int fl_hw_replace_filter(struct tcf_proto *tp,
@@ -323,7 +325,9 @@ static int fl_hw_replace_filter(struct tcf_proto *tp,
 		return err;
 	} else if (err > 0) {
 		f->in_hw_count = err;
+		spin_lock(&tp->lock);
 		tcf_block_offload_inc(block, &f->flags);
+		spin_unlock(&tp->lock);
 	}
 
 	if (skip_sw && !(f->flags & TCA_CLS_FLAGS_IN_HW))
@@ -409,6 +413,7 @@ static int __fl_delete(struct tcf_proto *tp, struct cls_fl_filter *f,
 
 	(*last) = false;
 
+	spin_lock(&tp->lock);
 	if (!tc_deleted(f->flags)) {
 		f->flags |= TCA_CLS_FLAGS_DELETED;
 		if (!tc_skip_sw(f->flags))
@@ -416,12 +421,15 @@ static int __fl_delete(struct tcf_proto *tp, struct cls_fl_filter *f,
 					       f->mask->filter_ht_params);
 		idr_remove_ext(&head->handle_idr, f->handle);
 		list_del_rcu(&f->list);
+		spin_unlock(&tp->lock);
+
 		(*last) = fl_mask_put(head, f->mask, async);
 		if (!tc_skip_hw(f->flags))
 			fl_hw_destroy_filter(tp, f);
 		tcf_unbind_filter(tp, &f->res);
 		__fl_put(f);
 	} else {
+		spin_unlock(&tp->lock);
 		err = -ENOENT;
 	}
 
@@ -1152,6 +1160,8 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 	if (!tc_in_hw(fnew->flags))
 		fnew->flags |= TCA_CLS_FLAGS_NOT_IN_HW;
 
+	spin_lock(&tp->lock);
+
 	/* tp was deleted concurrently. EAGAIN will cause caller to lookup proto
 	 * again or create new one, if necessary.
 	 */
@@ -1188,6 +1198,8 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 		idr_replace_ext(&head->handle_idr, fnew, fnew->handle);
 		list_replace_rcu(&fold->list, &fnew->list);
 		fold->flags |= TCA_CLS_FLAGS_DELETED;
+
+		spin_unlock(&tp->lock);
 
 		fl_mask_put(head, fold->mask, true);
 		if (!tc_skip_hw(fold->flags))
@@ -1235,6 +1247,7 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 
 
 		list_add_tail_rcu(&fnew->list, &fnew->mask->filters);
+		spin_unlock(&tp->lock);
 	}
 
 	*arg = fnew;
@@ -1246,6 +1259,7 @@ errout_idr:
 	if (!fold)
 		idr_remove_ext(&head->handle_idr, fnew->handle);
 errout_hw:
+	spin_unlock(&tp->lock);
 	if (!tc_skip_hw(fnew->flags))
 		fl_hw_destroy_filter(tp, fnew);
 errout_mask:
@@ -1328,8 +1342,10 @@ static int fl_reoffload(struct tcf_proto *tp, bool add, tc_setup_cb_t *cb,
 				continue;
 			}
 
+			spin_lock(&tp->lock);
 			tc_cls_offload_cnt_update(block, &f->in_hw_count,
 						  &f->flags, add);
+			spin_unlock(&tp->lock);
 		}
 	}
 
@@ -1731,6 +1747,7 @@ static int fl_dump(struct net *net, struct tcf_proto *tp, void *fh,
 	struct cls_fl_filter *f = fh;
 	struct nlattr *nest;
 	struct fl_flow_key *key, *mask;
+	bool skip_hw;
 
 	if (!f)
 		return skb->len;
@@ -1741,21 +1758,26 @@ static int fl_dump(struct net *net, struct tcf_proto *tp, void *fh,
 	if (!nest)
 		goto nla_put_failure;
 
+	spin_lock(&tp->lock);
+
 	if (f->res.classid &&
 	    nla_put_u32(skb, TCA_FLOWER_CLASSID, f->res.classid))
-		goto nla_put_failure;
+		goto nla_put_failure_locked;
 
 	key = &f->key;
 	mask = &f->mask->key;
+	skip_hw = tc_skip_hw(f->flags);
 
 	if (fl_dump_key(skb, net, key, mask))
-		goto nla_put_failure;
-
-	if (!tc_skip_hw(f->flags))
-		fl_hw_update_stats(tp, f);
+		goto nla_put_failure_locked;
 
 	if (f->flags && nla_put_u32(skb, TCA_FLOWER_FLAGS, f->flags))
-		goto nla_put_failure;
+		goto nla_put_failure_locked;
+
+	spin_unlock(&tp->lock);
+
+	if (!skip_hw)
+		fl_hw_update_stats(tp, f);
 
 	if (tcf_exts_dump(skb, &f->exts))
 		goto nla_put_failure;
@@ -1767,6 +1789,8 @@ static int fl_dump(struct net *net, struct tcf_proto *tp, void *fh,
 
 	return skb->len;
 
+nla_put_failure_locked:
+	spin_unlock(&tp->lock);
 nla_put_failure:
 	nla_nest_cancel(skb, nest);
 	return -1;
