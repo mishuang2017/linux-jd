@@ -814,6 +814,12 @@ enum tc_setup_type {
 	TC_SETUP_CLSMATCHALL,
 	TC_SETUP_CLSBPF,
 	TC_SETUP_BLOCK,
+	TC_SETUP_MICROFLOW,
+};
+
+struct tc_microflow_offload {
+	struct sk_buff *skb;
+	unsigned long cookie;
 };
 
 struct tc_cls_u32_offload;
