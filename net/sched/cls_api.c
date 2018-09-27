@@ -966,6 +966,7 @@ errout_qdisc:
 			qdisc_put(*q);
 		else
 			qdisc_put_unlocked(*q);
+		*q = NULL;
 	}
 	return ERR_PTR(err);
 }
