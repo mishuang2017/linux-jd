@@ -741,9 +741,6 @@ struct sk_buff {
 
 	__be16			vlan_proto;
 	__u16			vlan_tci;
-
-	__u32			tc_recirc_id;
-	void			*tc_priv;
 #ifdef CONFIG_NET_SCHED
 	__u16			tc_index;	/* traffic control index */
 #ifdef CONFIG_NET_CLS_ACT

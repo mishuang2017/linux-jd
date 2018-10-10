@@ -11,14 +11,14 @@
  *     without modification, are permitted provided that the following
  *     conditions are met:
  *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
+ *	- Redistributions of source code must retain the above
+ *	  copyright notice, this list of conditions and the following
+ *	  disclaimer.
  *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
+ *	- Redistributions in binary form must reproduce the above
+ *	  copyright notice, this list of conditions and the following
+ *	  disclaimer in the documentation and/or other materials
+ *	  provided with the distribution.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -67,7 +67,7 @@
  * - query (single thread workqueue context)
  *   destroy/dump - no conflict (see destroy)
  *   query/dump - packets and bytes might be inconsistent (since update is not
- *                atomic)
+ *		  atomic)
  *   query/create - no conflict (see create)
  *   since every create/destroy spawn the work, only after necessary time has
  *   elapsed, the thread will actually query the hardware.
@@ -97,6 +97,21 @@ static void mlx5_fc_stats_insert(struct mlx5_core_dev *dev,
 	struct list_head *next = mlx5_fc_counters_lookup_next(dev, counter->id);
 
 	list_add_tail(&counter->list, next);
+}
+
+static void fc_dummies_update(struct mlx5_fc *counter,
+			      u64 dfpackets, u64 dfbytes, u64 jiffies)
+{
+	int i;
+
+	for (i=0; i<counter->nf_dummies; i++) {
+		struct mlx5_fc *s = counter->dummies[i];
+		struct mlx5_fc_cache *c = &s->cache;
+
+		c->packets += dfpackets;
+		c->bytes += dfbytes;
+		c->lastuse = jiffies;
+	}
 }
 
 static void mlx5_fc_stats_remove(struct mlx5_core_dev *dev,
@@ -175,18 +190,7 @@ static struct mlx5_fc *mlx5_fc_stats_query(struct mlx5_core_dev *dev,
 		c->bytes = bytes;
 		c->lastuse = jiffies;
 
-		if (counter->shared) {
-			int i;
-
-			for (i = 0; i < counter->nshared; i++) {
-				struct mlx5_fc *s = counter->shared[i];
-				struct mlx5_fc_cache *c = &s->cache;
-
-				c->packets += dfpackets;
-				c->bytes += dfbytes;
-				c->lastuse = jiffies;
-			}
-		}
+		fc_dummies_update(counter, dfpackets, dfbytes, jiffies);
 	}
 
 out:
@@ -225,6 +229,8 @@ static void mlx5_fc_stats_work(struct work_struct *work)
 	llist_for_each_entry_safe(counter, tmp, dellist, dellist) {
 		mlx5_fc_stats_remove(dev, counter);
 
+		if (!counter->dummy)
+			mlx5_cmd_fc_free(dev, counter->id);
 		mlx5_free_fc(dev, counter);
 	}
 
@@ -241,6 +247,29 @@ static void mlx5_fc_stats_work(struct work_struct *work)
 	fc_stats->next_query = now + fc_stats->sampling_interval;
 }
 
+int mlx5_fc_attach(struct mlx5_core_dev *dev, struct mlx5_fc *counter, bool aging)
+{
+	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
+	int err;
+
+	err = mlx5_cmd_fc_alloc(dev, &counter->id);
+	if (err)
+		return err;
+
+	counter->dummy = false;
+
+	if (aging) {
+		counter->cache.lastuse = jiffies;
+		counter->aging = true;
+
+		llist_add(&counter->addlist, &fc_stats->addlist);
+
+		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
+	}
+
+	return 0;
+}
+
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
 {
 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
@@ -255,6 +284,8 @@ struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
 	err = mlx5_cmd_fc_alloc(dev, &counter->id);
 	if (err)
 		goto err_out;
+
+	counter->dummy = false;
 
 	if (aging) {
 		unsigned long idr_index;
@@ -300,40 +331,17 @@ struct mlx5_fc *mlx5_fc_alloc(void)
 	if (!counter)
 		return ERR_PTR(-ENOMEM);
 
+	counter->dummy = true;
 	/* TODO: fix */
-	counter->is_shared = true;
 	counter->aging = true;
-	counter->cache.lastuse = jiffies;
 
 	return counter;
 }
 
-int mlx5_fc_attach(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
+void mlx5_fc_link_dummies(struct mlx5_fc *counter, struct mlx5_fc **dummies, int nf_dummies)
 {
-	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
-	int err;
-
-	err = mlx5_cmd_fc_alloc(dev, &counter->id);
-	if (err)
-		return err;
-
-	/* TODO: fix */
-	counter->is_shared = false;
-
-	counter->cache.lastuse = jiffies;
-	counter->aging = true;
-
-	llist_add(&counter->addlist, &fc_stats->addlist);
-
-	mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
-
-	return 0;
-}
-
-void mlx5_fc_link_shared_counter(struct mlx5_fc *counter, struct mlx5_fc **shared, int nshared)
-{
-	counter->nshared = nshared;
-	counter->shared = shared;
+	counter->dummies = dummies;
+	counter->nf_dummies = nf_dummies;
 }
 
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
@@ -344,7 +352,8 @@ void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 		return;
 
 	if (counter->aging) {
-		llist_add(&counter->dellist, &fc_stats->dellist);
+		if (counter->dummy)
+			llist_add(&counter->dellist, &fc_stats->dellist);
 		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
 		return;
 	}
@@ -388,7 +397,7 @@ void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev)
 
 	tmplist = llist_del_all(&fc_stats->addlist);
 	llist_for_each_entry_safe(counter, tmp, tmplist, addlist)
-		if (!counter->is_shared)
+		if (!counter->dummy)
 			mlx5_free_fc(dev, counter);
 
 	list_for_each_entry_safe(counter, tmp, &fc_stats->counters, list)
