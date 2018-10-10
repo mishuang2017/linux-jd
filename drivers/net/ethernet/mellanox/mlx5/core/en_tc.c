@@ -88,6 +88,7 @@ struct mlx5e_tc_flow {
 	struct list_head	mod_hdr; /* flows sharing the same mod hdr ID */
 	struct list_head	hairpin; /* flows sharing the same hairpin */
 	refcount_t		refcnt;
+	struct rcu_head		rcu_head;
 	union {
 		struct mlx5_esw_flow_attr esw_attr[0];
 		struct mlx5_nic_flow_attr nic_attr[0];
@@ -170,7 +171,7 @@ static void mlx5e_flow_put(struct mlx5e_priv *priv,
 {
 	if (refcount_dec_and_test(&flow->refcnt)) {
 		mlx5e_tc_del_flow(priv, flow);
-		kfree(flow);
+		kfree_rcu(flow, rcu_head);
 	}
 }
 
@@ -2838,6 +2839,32 @@ static struct rhashtable *get_tc_ht(struct mlx5e_priv *priv)
 		return &priv->fs.tc.ht;
 }
 
+static void lock_tc_ht(struct mlx5e_priv *priv)
+{
+	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+	struct mlx5e_rep_priv *uplink_rpriv;
+
+	if (MLX5_VPORT_MANAGER(priv->mdev) && esw->mode == SRIOV_OFFLOADS) {
+		uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
+		spin_lock(&uplink_rpriv->tc_ht_lock);
+	} else {
+		spin_lock(&priv->fs.tc.ht_lock);
+	}
+}
+
+static void unlock_tc_ht(struct mlx5e_priv *priv)
+{
+	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
+	struct mlx5e_rep_priv *uplink_rpriv;
+
+	if (MLX5_VPORT_MANAGER(priv->mdev) && esw->mode == SRIOV_OFFLOADS) {
+		uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
+		spin_unlock(&uplink_rpriv->tc_ht_lock);
+	} else {
+		spin_unlock(&priv->fs.tc.ht_lock);
+	}
+}
+
 int mlx5e_configure_flower(struct mlx5e_priv *priv,
 			   struct tc_cls_flower_offload *f, int flags)
 {
@@ -2850,11 +2877,14 @@ int mlx5e_configure_flower(struct mlx5e_priv *priv,
 
 	get_flags(flags, &flow_flags);
 
-	flow = rhashtable_lookup_fast(tc_ht, &f->cookie, tc_ht_params);
+	rcu_read_lock();
+	flow = rhashtable_lookup(tc_ht, &f->cookie, tc_ht_params);
 	if (flow) {
+		rcu_read_unlock();
 		netdev_warn_once(priv->netdev, "flow cookie %lx already exists, ignoring\n", f->cookie);
 		return 0;
 	}
+	rcu_read_unlock();
 
 	if (esw && esw->mode == SRIOV_OFFLOADS) {
 		flow_flags |= MLX5E_TC_FLOW_ESWITCH;
@@ -2937,11 +2967,16 @@ int mlx5e_delete_flower(struct mlx5e_priv *priv,
 	struct rhashtable *tc_ht = get_tc_ht(priv);
 	struct mlx5e_tc_flow *flow;
 
+	lock_tc_ht(priv);
+
 	flow = rhashtable_lookup_fast(tc_ht, &f->cookie, tc_ht_params);
-	if (!flow || !same_flow_direction(flow, flags))
+	if (!flow || !same_flow_direction(flow, flags)) {
+		unlock_tc_ht(priv);
 		return -EINVAL;
+	}
 
 	rhashtable_remove_fast(tc_ht, &flow->node, tc_ht_params);
+	unlock_tc_ht(priv);
 
 	mlx5e_flow_put(priv, flow);
 
@@ -2959,8 +2994,10 @@ int mlx5e_stats_flower(struct mlx5e_priv *priv,
 	u64 lastuse;
 	int err = 0;
 
-	flow = mlx5e_flow_get(rhashtable_lookup_fast(tc_ht, &f->cookie,
-						     tc_ht_params));
+	rcu_read_lock();
+	flow = mlx5e_flow_get(rhashtable_lookup(tc_ht, &f->cookie,
+						tc_ht_params));
+	rcu_read_unlock();
 	if (IS_ERR(flow)) {
 		return PTR_ERR(flow);
 	} else if (!same_flow_direction(flow, flags)) {
@@ -2990,6 +3027,7 @@ int mlx5e_tc_nic_init(struct mlx5e_priv *priv)
 	hash_init(tc->mod_hdr_tbl);
 	hash_init(tc->hairpin_tbl);
 
+	spin_lock_init(&tc->ht_lock);
 	return rhashtable_init(&tc->ht, &tc_ht_params);
 }
 
