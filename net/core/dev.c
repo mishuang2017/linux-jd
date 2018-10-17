@@ -3927,8 +3927,6 @@ sch_handle_ingress(struct sk_buff *skb, struct packet_type **pt_prev, int *ret,
 
 	qdisc_skb_cb(skb)->pkt_len = skb->len;
 	skb->tc_verd = SET_TC_AT(skb->tc_verd, AT_INGRESS);
-	/* Temp */
-	TC_CB(skb)->tc_priv = NULL;
 	mini_qdisc_bstats_cpu_update(miniq, skb);
 
 	switch (tcf_classify(skb, miniq->filter_list, &cl_res, false)) {
