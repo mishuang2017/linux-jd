@@ -828,9 +828,7 @@ struct tc_microflow_offload {
 
 struct tc_ct_offload {
 	struct sk_buff *skb;
-	struct net *net;
 	struct nf_conntrack_tuple *tuple;
-	struct nf_conntrack_zone *zone;
 };
 
 struct tc_cls_u32_offload;
