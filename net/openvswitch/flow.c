@@ -53,6 +53,8 @@
 #include "flow_netlink.h"
 #include "vport.h"
 
+#include <linux/yktrace.h>
+
 u64 ovs_flow_used_time(unsigned long flow_jiffies)
 {
 	struct timespec cur_ts;
@@ -755,7 +757,7 @@ int ovs_flow_key_extract(const struct ip_tunnel_info *tun_info,
 	ovs_ct_fill_key(skb, key);
 	key->ovs_flow_hash = 0;
 	key->recirc_id = OVS_CB(skb)->recirc_id;
-	printk(KERN_ERR "%s %d %s @@ key->recirc_id %d\n", __FILE__, __LINE__, __func__, key->recirc_id);
+	trace("key->recirc_id %d\n", key->recirc_id);
 	return key_extract(skb, key);
 }
 
