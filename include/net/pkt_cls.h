@@ -771,12 +771,11 @@ struct tc_cls_bpf_offload {
 	bool exts_integrated;
 };
 
-/* TODO: temp */
+/* TODO: temp, use qdisc_skb_cb's data, is it used in ingress? */
 struct tc_skb_cb {
 	struct qdisc_skb_cb cb;
 
 	u32 recirc_id;
-	void *tc_priv;
 };
 
 #define TC_CB(skb) ((struct tc_skb_cb *)(skb)->cb)
