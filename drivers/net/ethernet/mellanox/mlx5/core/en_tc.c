@@ -1061,7 +1061,7 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 			}
 		}
                 
-		flow->esw_attr->counter=counter;
+		flow->esw_attr->counter = counter;
 		flow->rule[0] = mlx5_eswitch_add_offloaded_rule(esw, &esw_attr->parse_attr->spec, esw_attr);
 		if (IS_ERR(flow->rule[0])) {
 			err = PTR_ERR(flow->rule[0]);
