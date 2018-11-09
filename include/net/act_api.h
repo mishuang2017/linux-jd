@@ -145,6 +145,8 @@ int tcf_idr_search(struct tc_action_net *tn, struct tc_action **a, u32 index);
 int tcf_idr_create(struct tc_action_net *tn, u32 index, struct nlattr *est,
 		   struct tc_action **a, const struct tc_action_ops *ops,
 		   int bind, bool cpustats);
+bool tcf_idr_check(struct tc_action_net *tn, u32 index, struct tc_action **a,
+		   int bind);
 void tcf_idr_insert(struct tc_action_net *tn, struct tc_action *a);
 
 void tcf_idr_cleanup(struct tc_action_net *tn, u32 index);

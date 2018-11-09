@@ -298,6 +298,17 @@ int tcf_generic_walker(struct tc_action_net *tn, struct sk_buff *skb,
 }
 EXPORT_SYMBOL(tcf_generic_walker);
 
+static struct tc_action *tcf_idr_lookup(u32 index, struct tcf_idrinfo *idrinfo)
+{
+	struct tc_action *p = NULL;
+
+	spin_lock(&idrinfo->lock);
+	p = idr_find_ext(&idrinfo->action_idr, index);
+	spin_unlock(&idrinfo->lock);
+
+	return p;
+}
+
 int tcf_idr_search(struct tc_action_net *tn, struct tc_action **a, u32 index)
 {
 	struct tcf_idrinfo *idrinfo = tn->idrinfo;
@@ -318,6 +329,23 @@ int tcf_idr_search(struct tc_action_net *tn, struct tc_action **a, u32 index)
 	return false;
 }
 EXPORT_SYMBOL(tcf_idr_search);
+
+bool tcf_idr_check(struct tc_action_net *tn, u32 index, struct tc_action **a,
+		   int bind)
+{
+	struct tcf_idrinfo *idrinfo = tn->idrinfo;
+	struct tc_action *p = tcf_idr_lookup(index, idrinfo);
+
+	if (index && p) {
+		if (bind)
+			 atomic_inc(&p->tcfa_bindcnt);
+		refcount_inc(&p->tcfa_refcnt);
+		*a = p;
+		return true;
+	}
+	return false;
+}
+EXPORT_SYMBOL(tcf_idr_check);
 
 static int tcf_idr_delete_index(struct tcf_idrinfo *idrinfo, u32 index)
 {
