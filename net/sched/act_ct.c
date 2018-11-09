@@ -78,8 +78,7 @@ static const struct nla_policy conntrack_policy[TCA_CONNTRACK_MAX + 1] = {
 
 static int tcf_conntrack_init(struct net *net, struct nlattr *nla,
 			     struct nlattr *est, struct tc_action **a,
-			     int ovr, int bind,
-			     struct netlink_ext_ack *extack)
+			     int ovr, int bind, bool rtnl_hedl)
 {
 	struct tc_action_net *tn = net_generic(net, conntrack_net_id);
 	struct nlattr *tb[TCA_CONNTRACK_MAX + 1];
@@ -92,8 +91,7 @@ static int tcf_conntrack_init(struct net *net, struct nlattr *nla,
 	if (!nla)
 		return -EINVAL;
 
-	ret = nla_parse_nested(tb, TCA_CONNTRACK_MAX, nla, conntrack_policy,
-			       NULL);
+	ret = nla_parse_nested(tb, TCA_CONNTRACK_MAX, nla, conntrack_policy);
 	if (ret < 0)
 		return ret;
 
@@ -138,8 +136,8 @@ static inline int tcf_conntrack_dump(struct sk_buff *skb, struct tc_action *a,
 
 	struct tc_conntrack opt = {
 		.index   = ci->tcf_index,
-		.refcnt  = ci->tcf_refcnt - ref,
-		.bindcnt = ci->tcf_bindcnt - bind,
+		.refcnt  = refcount_read(&ci->tcf_refcnt) - ref,
+		.bindcnt = atomic_read(&ci->tcf_bindcnt) - bind,
 		.action  = ci->tcf_action,
 		.zone   = ci->zone,
 	};
@@ -161,16 +159,14 @@ nla_put_failure:
 
 static int tcf_conntrack_walker(struct net *net, struct sk_buff *skb,
 			       struct netlink_callback *cb, int type,
-			       const struct tc_action_ops *ops,
-			       struct netlink_ext_ack *extack)
+			       const struct tc_action_ops *ops)
 {
 	struct tc_action_net *tn = net_generic(net, conntrack_net_id);
 
-	return tcf_generic_walker(tn, skb, cb, type, ops, extack);
+	return tcf_generic_walker(tn, skb, cb, type, ops);
 }
 
-static int tcf_conntrack_search(struct net *net, struct tc_action **a, u32 index,
-			       struct netlink_ext_ack *extack)
+static int tcf_conntrack_search(struct net *net, struct tc_action **a, u32 index)
 {
 	struct tc_action_net *tn = net_generic(net, conntrack_net_id);
 
