@@ -546,7 +546,7 @@ static int mlx5e_hairpin_get_prio(struct mlx5e_priv *priv,
 				  struct mlx5_flow_spec *spec, u8 *match_prio)
 {
 	void *headers_c, *headers_v;
-	u8 prio_val, prio_mask = 0;
+	u8 prio_val = 0, prio_mask = 0;
 	bool vlan_present;
 
 #ifdef CONFIG_MLX5_CORE_EN_DCB
@@ -3104,8 +3104,6 @@ static int microflow_merge_ct(struct mlx5e_tc_flow *mflow,
 			      struct mlx5e_tc_flow *flow,
 			      struct sk_buff *skb)
 {
-	struct net_device *dev = skb->dev;
-	struct net *net = dev_net(dev);
 	struct nf_conntrack_tuple nf_tuple;
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn *ct = NULL;
@@ -3131,7 +3129,7 @@ static int microflow_merge_ct(struct mlx5e_tc_flow *mflow,
 	       ctinfo == IP_CT_ESTABLISHED_REPLY);
           
 	if (!nf_ct_get_tuplepr(skb, skb_network_offset(skb),
-			       NFPROTO_IPV4, net, &nf_tuple))
+			       NFPROTO_IPV4, &nf_tuple))
 	{
 		etrace("ct: error nf_ct_get_tuplepr");
 		return -EINVAL;

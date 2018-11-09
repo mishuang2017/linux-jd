@@ -251,7 +251,7 @@ static int fl_classify(struct sk_buff *skb, const struct tcf_proto *tp,
 		f = fl_lookup(mask, &skb_mkey);
 		/* What's the point of matching against skip_sw rules? */
 		if (f && !tc_skip_sw(f->flags)) {
-			struct tc_microflow_offload mf = { skb, f };
+			struct tc_microflow_offload mf = { skb, (unsigned long)f };
 
 			*res = f->res;
 			ret = tcf_exts_exec(skb, &f->exts, res);

@@ -219,6 +219,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 					EMIT(offsetof(struct sk_buff, data_len), 4);
 				}
 
+#if 0
 				if (is_imm8(offsetof(struct sk_buff, data)))
 					/* mov off8(%rdi),%r8 */
 					EMIT4(0x4c, 0x8b, 0x47, offsetof(struct sk_buff, data));
@@ -227,6 +228,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 					EMIT3(0x4c, 0x8b, 0x87);
 					EMIT(offsetof(struct sk_buff, data), 4);
 				}
+#endif
 			}
 		}
 
