@@ -294,6 +294,12 @@ struct nf_conn *nf_ct_tmpl_alloc(struct net *net,
 				 gfp_t flags);
 void nf_ct_tmpl_free(struct nf_conn *tmpl);
 
+static inline void
+nf_ct_set(struct sk_buff *skb, struct nf_conn *ct, enum ip_conntrack_info info)
+{
+	skb->_nfct = (unsigned long)ct | info;
+}
+
 #define NF_CT_STAT_INC(net, count)	  __this_cpu_inc((net)->ct.stat->count)
 #define NF_CT_STAT_INC_ATOMIC(net, count) this_cpu_inc((net)->ct.stat->count)
 
