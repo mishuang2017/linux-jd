@@ -33,18 +33,18 @@ static struct tc_action_ops act_conntrack_ops;
 static int tcf_conntrack(struct sk_buff *skb, const struct tc_action *a,
 			struct tcf_result *res)
 {
-	const struct nf_conntrack_tuple_hash *thash;
-	struct nf_conntrack_tuple tuple;
-	enum ip_conntrack_info ctinfo;
+/* 	const struct nf_conntrack_tuple_hash *thash; */
+/* 	struct nf_conntrack_tuple tuple; */
+/* 	enum ip_conntrack_info ctinfo; */
 	struct tcf_conntrack_info *ca = to_conntrack(a);
-	struct nf_conntrack_zone zone;
-	struct nf_conn *c;
+/* 	struct nf_conntrack_zone zone; */
+/* 	struct nf_conn *c; */
 	struct net *net = dev_net(skb->dev);
-	struct nf_conn *ct;
-	int proto;
+/* 	struct nf_conn *ct; */
+/* 	int proto; */
 	int err;
 
-	int nh_ofs;
+/* 	int nh_ofs; */
 
 	/* The conntrack module expects to be working at L3. */
 	//nh_ofs = skb_network_offset(skb);
