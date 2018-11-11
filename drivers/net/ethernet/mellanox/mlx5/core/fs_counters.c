@@ -247,29 +247,6 @@ static void mlx5_fc_stats_work(struct work_struct *work)
 	fc_stats->next_query = now + fc_stats->sampling_interval;
 }
 
-int mlx5_fc_attach(struct mlx5_core_dev *dev, struct mlx5_fc *counter, bool aging)
-{
-	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
-	int err;
-
-	err = mlx5_cmd_fc_alloc(dev, &counter->id);
-	if (err)
-		return err;
-
-	counter->dummy = false;
-	counter->aging = aging;
-
-	if (aging) {
-		counter->cache.lastuse = jiffies;
-
-		llist_add(&counter->addlist, &fc_stats->addlist);
-
-		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
-	}
-
-	return 0;
-}
-
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
 {
 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
@@ -339,8 +316,9 @@ struct mlx5_fc *mlx5_fc_alloc(gfp_t flags)
 
 void mlx5_fc_link_dummies(struct mlx5_fc *counter, struct mlx5_fc **dummies, int nf_dummies)
 {
-	counter->dummies = dummies;
-	counter->nf_dummies = nf_dummies;
+	/* TODO: use memory barrier, is the following correct? */
+	WRITE_ONCE(counter->dummies, dummies);
+	WRITE_ONCE(counter->nf_dummies, nf_dummies);
 }
 
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)

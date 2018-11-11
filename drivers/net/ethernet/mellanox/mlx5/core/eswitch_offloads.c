@@ -139,7 +139,7 @@ mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 	return rule;
 
 err_add_rule:
-	mlx5_fc_destroy(esw->dev, attr->counter);
+	mlx5_fc_destroy(esw->dev, counter);
 err_counter_alloc:
 	return rule;
 }
