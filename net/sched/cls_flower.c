@@ -247,7 +247,7 @@ static int fl_classify(struct sk_buff *skb, const struct tcf_proto *tp,
 		       struct tcf_result *res)
 {
 	struct cls_fl_head *head = rcu_dereference_bh(tp->root);
-	struct tcf_block *block = tp->chain->block;
+/* 	struct tcf_block *block = tp->chain->block; */
 	struct cls_fl_filter *f;
 	struct fl_flow_mask *mask;
 	struct fl_flow_key skb_key;
