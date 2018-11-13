@@ -47,7 +47,7 @@ config NF_CONNTRACK
 	  To compile it as a module, choose M here.  If unsure, say N.
 
 config NFT_GEN_FLOW_OFFLOAD
-	depends on NF_CONNTRACK && NF_FLOW_TABLE
+	depends on NF_CONNTRACK
 	tristate "Netfilter nf_tables smartnic flow offload module"
 	help
 	  This option provides flow_offload add, remove, expiration  API.
