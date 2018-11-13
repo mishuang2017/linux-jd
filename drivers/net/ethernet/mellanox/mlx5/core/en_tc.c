@@ -1049,7 +1049,7 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 	mlx5e_rep_queue_neigh_stats_work(priv);
 
 	list_for_each_entry(flow, &e->flows, encap) {
-		struct mlx5_fc *counter;
+		struct mlx5_fc *counter = NULL;
 
 		esw_attr = flow->esw_attr;
 		esw_attr->encap_id = e->encap_id;
