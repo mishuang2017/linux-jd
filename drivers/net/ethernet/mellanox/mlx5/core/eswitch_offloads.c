@@ -51,6 +51,7 @@ mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 	struct mlx5_flow_destination dest[MLX5_MAX_FLOW_FWD_VPORTS + 1] = {};
 	struct mlx5_flow_act flow_act = { .flags = FLOW_ACT_NO_APPEND, };
 	struct mlx5_flow_table *ft = NULL;
+	struct mlx5_fc *counter = NULL;
 	struct mlx5_flow_handle *rule;
 	int j, i = 0;
 	void *misc;
@@ -90,13 +91,13 @@ mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 		}
 	}
 	if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_COUNT) {
-		int err = mlx5_fc_attach(esw->dev, attr->counter, true);
-		if (err) {
-			rule = ERR_PTR(err);
+		counter = mlx5_fc_create(esw->dev, true);
+		if (IS_ERR(counter)) {
+			rule = ERR_CAST(counter);
 			goto err_counter_alloc;
 		}
 		dest[i].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-		dest[i].counter = attr->counter;
+		dest[i].counter = counter;
 		i++;
 	}
 

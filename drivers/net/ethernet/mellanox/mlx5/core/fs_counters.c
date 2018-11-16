@@ -202,7 +202,8 @@ out:
 static void mlx5_free_fc(struct mlx5_core_dev *dev,
 			 struct mlx5_fc *counter)
 {
-	mlx5_cmd_fc_free(dev, counter->id);
+	if (!counter->dummy)
+		mlx5_cmd_fc_free(dev, counter->id);
 	kfree(counter);
 }
 
@@ -227,10 +228,9 @@ static void mlx5_fc_stats_work(struct work_struct *work)
 		mlx5_fc_stats_insert(dev, counter);
 
 	llist_for_each_entry_safe(counter, tmp, dellist, dellist) {
-		mlx5_fc_stats_remove(dev, counter);
-
 		if (!counter->dummy)
-			mlx5_cmd_fc_free(dev, counter->id);
+			mlx5_fc_stats_remove(dev, counter);
+
 		mlx5_free_fc(dev, counter);
 	}
 
@@ -351,8 +351,7 @@ void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 		return;
 
 	if (counter->aging) {
-		if (counter->dummy)
-			llist_add(&counter->dellist, &fc_stats->dellist);
+		llist_add(&counter->dellist, &fc_stats->dellist);
 		mod_delayed_work(fc_stats->wq, &fc_stats->work, 0);
 		return;
 	}
