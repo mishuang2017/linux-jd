@@ -211,7 +211,7 @@ static int tcf_conntrack_init(struct net *net, struct nlattr *nla,
 
 	parm = nla_data(tb[TCA_CONNTRACK_PARMS]);
 
-	if (!tcf_idr_check(tn, parm->index, a, bind)) {
+	if (!tcf_idr_check_alloc(tn, &parm->index, a, bind)) {
 		ret = tcf_idr_create(tn, parm->index, est, a,
 				     &act_conntrack_ops, bind, false);
 		if (ret)
