@@ -3803,7 +3803,10 @@ int mlx5e_stats_flower(struct mlx5e_priv *priv,
 	if (!flow || !same_flow_direction(flow, flags))
 		return -EINVAL;
 
-	counter = flow->esw_attr->counter;
+	if (!(flow->flags & MLX5E_TC_FLOW_OFFLOADED))
+		return 0;
+
+	counter = mlx5_flow_rule_counter(flow->rule[0]);
 	if (!counter)
 		return 0;
 
