@@ -124,6 +124,7 @@ DEFINE_PER_CPU(struct mlx5e_microflow *, current_microflow) = NULL;
 
 /* TOOD: we should init this variable only once, rather than per PF? */
 /* we should have a microflow init/cleanup functions */
+static int microflow_cache_allocated;
 static struct kmem_cache *microflow_cache; // __ro_after_init; crashes??
 struct workqueue_struct *microflow_wq;
 
@@ -4023,12 +4024,16 @@ int mlx5e_tc_esw_init(struct mlx5e_priv *priv)
 	struct rhashtable *mf_ht = get_mf_ht(priv);
 	int err;
 
+	if (microflow_cache_allocated)
+		return -EOPNOTSUPP;
+
 	microflow_cache = kmem_cache_create("microflow_cache",
 					    sizeof(struct mlx5e_microflow),
 					    0, SLAB_HWCACHE_ALIGN,
 					    NULL);
 	if (!microflow_cache)
 		return -ENOMEM;
+	microflow_cache_allocated = 1;
 
 	err = rhashtable_init(tc_ht, &tc_ht_params);
 	if (err)
@@ -4052,6 +4057,7 @@ err_mf_ht:
 	rhashtable_free_and_destroy(tc_ht, NULL, NULL);
 err_tc_ht:
 	kmem_cache_destroy(microflow_cache);
+	microflow_cache_allocated = 0;
 	return err;
 }
 
@@ -4071,6 +4077,7 @@ void mlx5e_tc_esw_cleanup(struct mlx5e_priv *priv)
 	for_each_possible_cpu(cpu)
 		microflow_free(per_cpu(current_microflow, cpu));
 	kmem_cache_destroy(microflow_cache);
+	microflow_cache_allocated = 0;
 }
 
 int mlx5e_tc_num_filters(struct mlx5e_priv *priv)
