@@ -160,7 +160,7 @@ static inline int rtm_msgindex(int msgtype)
  */
 int __rtnl_register(int protocol, int msgtype,
 		    rtnl_doit_func doit, rtnl_dumpit_func dumpit,
-		    rtnl_calcit_func calcit)
+		    unsigned int flags)
 {
 	struct rtnl_link *tab;
 	int msgindex;
@@ -198,9 +198,9 @@ EXPORT_SYMBOL_GPL(__rtnl_register);
  */
 void rtnl_register(int protocol, int msgtype,
 		   rtnl_doit_func doit, rtnl_dumpit_func dumpit,
-		   rtnl_calcit_func calcit)
+		   unsigned int flags)
 {
-	if (__rtnl_register(protocol, msgtype, doit, dumpit, calcit) < 0)
+	if (__rtnl_register(protocol, msgtype, doit, dumpit, flags) < 0)
 		panic("Unable to register rtnetlink message handler, "
 		      "protocol = %d, message type = %d\n",
 		      protocol, msgtype);
@@ -898,7 +898,7 @@ static noinline size_t if_nlmsg_size(const struct net_device *dev,
 	       + nla_total_size(4) /* IFLA_CARRIER_CHANGES */
 	       + nla_total_size(4) /* IFLA_LINK_NETNSID */
 	       + nla_total_size(ext_filter_mask
-			        & RTEXT_FILTER_VF ? 4 : 0) /* IFLA_NUM_VF */
+				& RTEXT_FILTER_VF ? 4 : 0) /* IFLA_NUM_VF */
 	       + rtnl_vfinfo_size(dev, ext_filter_mask) /* IFLA_VFINFO_LIST */
 	       + rtnl_port_size(dev, ext_filter_mask) /* IFLA_VF_PORTS + IFLA_PORT_SELF */
 	       + rtnl_link_get_size(dev) /* IFLA_LINKINFO */
@@ -1203,9 +1203,9 @@ static int rtnl_fill_link_ifmap(struct sk_buff *skb, struct net_device *dev)
 		.mem_start   = dev->mem_start,
 		.mem_end     = dev->mem_end,
 		.base_addr   = dev->base_addr,
-		.irq         = dev->irq,
-		.dma         = dev->dma,
-		.port        = dev->if_port,
+		.irq	     = dev->irq,
+		.dma	     = dev->dma,
+		.port	     = dev->if_port,
 	};
 	if (nla_put_64bit(skb, IFLA_MAP, sizeof(map), &map, IFLA_PAD))
 		return -EMSGSIZE;
@@ -1380,7 +1380,7 @@ static const struct nla_policy ifla_policy[IFLA_MAX+1] = {
 	[IFLA_LINKINFO]		= { .type = NLA_NESTED },
 	[IFLA_NET_NS_PID]	= { .type = NLA_U32 },
 	[IFLA_NET_NS_FD]	= { .type = NLA_U32 },
-	[IFLA_IFALIAS]	        = { .type = NLA_STRING, .len = IFALIASZ-1 },
+	[IFLA_IFALIAS]		= { .type = NLA_STRING, .len = IFALIASZ-1 },
 	[IFLA_VFINFO_LIST]	= {. type = NLA_NESTED },
 	[IFLA_VF_PORTS]		= { .type = NLA_NESTED },
 	[IFLA_PORT_SELF]	= { .type = NLA_NESTED },
@@ -1390,7 +1390,7 @@ static const struct nla_policy ifla_policy[IFLA_MAX+1] = {
 	[IFLA_NUM_TX_QUEUES]	= { .type = NLA_U32 },
 	[IFLA_NUM_RX_QUEUES]	= { .type = NLA_U32 },
 	[IFLA_PHYS_PORT_ID]	= { .type = NLA_BINARY, .len = MAX_PHYS_ITEM_ID_LEN },
-	[IFLA_CARRIER_CHANGES]	= { .type = NLA_U32 },  /* ignored */
+	[IFLA_CARRIER_CHANGES]	= { .type = NLA_U32 },	/* ignored */
 	[IFLA_PHYS_SWITCH_ID]	= { .type = NLA_BINARY, .len = MAX_PHYS_ITEM_ID_LEN },
 	[IFLA_LINK_NETNSID]	= { .type = NLA_S32 },
 	[IFLA_PROTO_DOWN]	= { .type = NLA_U8 },
@@ -1406,7 +1406,7 @@ static const struct nla_policy ifla_info_policy[IFLA_INFO_MAX+1] = {
 static const struct nla_policy ifla_vf_policy[IFLA_VF_MAX+1] = {
 	[IFLA_VF_MAC]		= { .len = sizeof(struct ifla_vf_mac) },
 	[IFLA_VF_VLAN]		= { .len = sizeof(struct ifla_vf_vlan) },
-	[IFLA_VF_VLAN_LIST]     = { .type = NLA_NESTED },
+	[IFLA_VF_VLAN_LIST]	= { .type = NLA_NESTED },
 	[IFLA_VF_TX_RATE]	= { .len = sizeof(struct ifla_vf_tx_rate) },
 	[IFLA_VF_SPOOFCHK]	= { .len = sizeof(struct ifla_vf_spoofchk) },
 	[IFLA_VF_RATE]		= { .len = sizeof(struct ifla_vf_rate) },
@@ -2555,7 +2555,7 @@ static u16 rtnl_calcit(struct sk_buff *skb, struct nlmsghdr *nlh)
 	for_each_netdev_rcu(net, dev) {
 		min_ifinfo_dump_size = max_t(u16, min_ifinfo_dump_size,
 					     if_nlmsg_size(dev,
-						           ext_filter_mask));
+							   ext_filter_mask));
 	}
 	rcu_read_unlock();
 
@@ -2662,11 +2662,11 @@ static int nlmsg_populate_fdb_fill(struct sk_buff *skb,
 	ndm = nlmsg_data(nlh);
 	ndm->ndm_family  = AF_BRIDGE;
 	ndm->ndm_pad1	 = 0;
-	ndm->ndm_pad2    = 0;
+	ndm->ndm_pad2	 = 0;
 	ndm->ndm_flags	 = flags;
 	ndm->ndm_type	 = 0;
 	ndm->ndm_ifindex = dev->ifindex;
-	ndm->ndm_state   = NUD_PERMANENT;
+	ndm->ndm_state	 = NUD_PERMANENT;
 
 	if (nla_put(skb, NDA_LLADDR, ETH_ALEN, addr))
 		goto nla_put_failure;
@@ -4026,22 +4026,22 @@ void __init rtnetlink_init(void)
 	register_netdevice_notifier_rh(&rtnetlink_dev_notifier);
 
 	rtnl_register(PF_UNSPEC, RTM_GETLINK, rtnl_getlink,
-		      rtnl_dump_ifinfo, NULL);
-	rtnl_register(PF_UNSPEC, RTM_SETLINK, rtnl_setlink, NULL, NULL);
-	rtnl_register(PF_UNSPEC, RTM_NEWLINK, rtnl_newlink, NULL, NULL);
-	rtnl_register(PF_UNSPEC, RTM_DELLINK, rtnl_dellink, NULL, NULL);
+		      rtnl_dump_ifinfo, 0);
+	rtnl_register(PF_UNSPEC, RTM_SETLINK, rtnl_setlink, NULL, 0);
+	rtnl_register(PF_UNSPEC, RTM_NEWLINK, rtnl_newlink, NULL, 0);
+	rtnl_register(PF_UNSPEC, RTM_DELLINK, rtnl_dellink, NULL, 0);
 
-	rtnl_register(PF_UNSPEC, RTM_GETADDR, NULL, rtnl_dump_all, NULL);
-	rtnl_register(PF_UNSPEC, RTM_GETROUTE, NULL, rtnl_dump_all, NULL);
+	rtnl_register(PF_UNSPEC, RTM_GETADDR, NULL, rtnl_dump_all, 0);
+	rtnl_register(PF_UNSPEC, RTM_GETROUTE, NULL, rtnl_dump_all, 0);
 
-	rtnl_register(PF_BRIDGE, RTM_NEWNEIGH, rtnl_fdb_add, NULL, NULL);
-	rtnl_register(PF_BRIDGE, RTM_DELNEIGH, rtnl_fdb_del, NULL, NULL);
-	rtnl_register(PF_BRIDGE, RTM_GETNEIGH, NULL, rtnl_fdb_dump, NULL);
+	rtnl_register(PF_BRIDGE, RTM_NEWNEIGH, rtnl_fdb_add, NULL, 0);
+	rtnl_register(PF_BRIDGE, RTM_DELNEIGH, rtnl_fdb_del, NULL, 0);
+	rtnl_register(PF_BRIDGE, RTM_GETNEIGH, NULL, rtnl_fdb_dump, 0);
 
-	rtnl_register(PF_BRIDGE, RTM_GETLINK, NULL, rtnl_bridge_getlink, NULL);
-	rtnl_register(PF_BRIDGE, RTM_DELLINK, rtnl_bridge_dellink, NULL, NULL);
-	rtnl_register(PF_BRIDGE, RTM_SETLINK, rtnl_bridge_setlink, NULL, NULL);
+	rtnl_register(PF_BRIDGE, RTM_GETLINK, NULL, rtnl_bridge_getlink, 0);
+	rtnl_register(PF_BRIDGE, RTM_DELLINK, rtnl_bridge_dellink, NULL, 0);
+	rtnl_register(PF_BRIDGE, RTM_SETLINK, rtnl_bridge_setlink, NULL, 0);
 
 	rtnl_register(PF_UNSPEC, RTM_GETSTATS, rtnl_stats_get, rtnl_stats_dump,
-		      NULL);
+		      0);
 }
