@@ -690,9 +690,6 @@ struct sk_buff {
 #ifdef CONFIG_XFRM
 	struct	sec_path	*sp;
 #endif
-#if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
-	unsigned long            _nfct;
-#endif
 	unsigned int		len,
 				data_len;
 	__u16			mac_len,
