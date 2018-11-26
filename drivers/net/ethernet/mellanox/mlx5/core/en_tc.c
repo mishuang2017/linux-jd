@@ -120,6 +120,8 @@ struct mlx5e_tc_flow {
 	/* Don't add any fields here */
 };
 
+/* TODO: current_microflow is global and probelmatic when we'll support
+ * multiple HCAs. move it into mdev? */
 DEFINE_PER_CPU(struct mlx5e_microflow *, current_microflow) = NULL;
 
 /* TOOD: we should init this variable only once, rather than per PF? */
@@ -4075,8 +4077,10 @@ void mlx5e_tc_esw_cleanup(struct mlx5e_priv *priv)
 	rhashtable_free_and_destroy(tc_ht, _mlx5e_tc_del_flow, NULL);
 	rhashtable_free_and_destroy(mf_ht, NULL, NULL);
 
-	for_each_possible_cpu(cpu)
+	for_each_possible_cpu(cpu) {
 		microflow_free(per_cpu(current_microflow, cpu));
+		per_cpu(current_microflow, cpu) = NULL;
+	}
 	kmem_cache_destroy(microflow_cache);
 	microflow_cache_allocated = 0;
 }
