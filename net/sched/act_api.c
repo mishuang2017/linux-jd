@@ -1569,10 +1569,13 @@ static bool tcf_action_egdev_cb_needs_rtnl(struct tcf_action_egdev *egdev)
 	return false;
 }
 
-static int tcf_action_egdev_cb_call(struct tcf_action_egdev *egdev,
+static int tcf_action_egdev_cb_call(struct tcf_block *block,
+				    struct tcf_action_egdev *egdev,
 				    enum tc_setup_type type,
 				    void *type_data, bool err_stop,
-				    bool rtnl_held)
+				    bool rtnl_held,
+				    u32 *flags, spinlock_t *flags_lock,
+				    enum tc_block_update_offloadcnt update_count)
 {
 	struct tcf_action_egdev_cb *egdev_cb;
 	int ok_count = 0;
@@ -1610,6 +1613,22 @@ retry_locked:
 		}
 	}
 errout:
+	if (flags_lock)
+		spin_lock(flags_lock);
+	switch (update_count) {
+	case TC_BLOCK_OFFLOADCNT_INC:
+		if (ok_count > 0)
+			tcf_block_offload_inc(block, flags);
+		break;
+	case TC_BLOCK_OFFLOADCNT_DEC:
+		tcf_block_offload_dec(block, flags);
+		break;
+	default:
+		break;
+	}
+	if (flags_lock)
+		spin_unlock(flags_lock);
+
 	up_read(&egdev->cb_list_lock);
 	if (needs_rtnl)
 		rtnl_unlock();
@@ -1734,16 +1753,18 @@ void tc_setup_cb_egdev_unregister_unlocked(const struct net_device *dev,
 }
 EXPORT_SYMBOL_GPL(tc_setup_cb_egdev_unregister_unlocked);
 
-int tc_setup_cb_egdev_call(const struct net_device *dev,
+int tc_setup_cb_egdev_call(struct tcf_block *block, const struct net_device *dev,
 			   enum tc_setup_type type, void *type_data,
-			   bool err_stop, bool rtnl_held)
+			   bool err_stop, bool rtnl_held,
+			   u32 *flags, spinlock_t *flags_lock,
+			   enum tc_block_update_offloadcnt update_count)
 {
 	struct tcf_action_egdev *egdev = tcf_action_egdev_lookup(dev);
 
 	if (!egdev)
 		return 0;
-	return tcf_action_egdev_cb_call(egdev, type, type_data, err_stop,
-					rtnl_held);
+	return tcf_action_egdev_cb_call(block, egdev, type, type_data, err_stop,
+					rtnl_held, flags, flags_lock, update_count);
 }
 EXPORT_SYMBOL_GPL(tc_setup_cb_egdev_call);
 
