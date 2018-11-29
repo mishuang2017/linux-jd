@@ -1153,8 +1153,7 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 	if (err)
 		goto errout;
 
-	if (!tc_skip_sw(fnew->flags) && !fold &&
-	    fl_lookup(fnew->mask, &fnew->mkey)) {
+	if (!fold && fl_lookup(fnew->mask, &fnew->mkey)) {
 		err = -EEXIST;
 		goto errout_mask;
 	}
@@ -1188,21 +1187,15 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 
 		fnew->handle = handle;
 
-		if (!tc_skip_sw(fnew->flags)) {
-			struct rhashtable_params filter_ht_params =
-				fnew->mask->filter_ht_params;
+		err = rhashtable_insert_fast(&fnew->mask->ht,
+				&fnew->ht_node,
+				fnew->mask->filter_ht_params);
+		if (err)
+			goto errout_hw;
 
-			err = rhashtable_insert_fast(&fnew->mask->ht,
-						     &fnew->ht_node,
-						     filter_ht_params);
-			if (err)
-				goto errout_hw;
-		}
-
-		if (!tc_skip_sw(fold->flags))
-			rhashtable_remove_fast(&fold->mask->ht,
-					       &fold->ht_node,
-					       fold->mask->filter_ht_params);
+		rhashtable_remove_fast(&fold->mask->ht,
+				       &fold->ht_node,
+				       fold->mask->filter_ht_params);
 		idr_replace_ext(&head->handle_idr, fnew, fnew->handle);
 		list_replace_rcu(&fold->list, &fnew->list);
 		fold->flags |= TCA_CLS_FLAGS_DELETED;
@@ -1242,14 +1235,9 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 			goto errout_hw;
 		fnew->handle = idr_index;
 
-		if (!tc_skip_sw(fnew->flags)) {
-			struct rhashtable_params filter_ht_params =
-				fnew->mask->filter_ht_params;
-
-			err = rhashtable_insert_fast(&fnew->mask->ht,
-						     &fnew->ht_node,
-						     filter_ht_params);
-		}
+		err = rhashtable_insert_fast(&fnew->mask->ht,
+				&fnew->ht_node,
+				fnew->mask->filter_ht_params);
 		if (err)
 			goto errout_idr;
 
