@@ -957,11 +957,19 @@ void qdisc_free(struct Qdisc *qdisc)
 	kfree((char *) qdisc - qdisc->padded);
 }
 
+static void qdisc_free_work(struct work_struct *work)
+{
+	struct Qdisc *qdisc = container_of(work, struct Qdisc, work);
+
+	qdisc_free(qdisc);
+}
+
 void qdisc_free_cb(struct rcu_head *head)
 {
 	struct Qdisc *q = container_of(head, struct Qdisc, rcu);
 
-	qdisc_free(q);
+	INIT_WORK(&q->work, qdisc_free_work);
+	tc_queue_proto_work(&q->work);
 }
 
 static void qdisc_destroy(struct Qdisc *qdisc)

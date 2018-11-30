@@ -125,7 +125,10 @@ struct Qdisc {
 
 	spinlock_t		busylock ____cacheline_aligned_in_smp;
 	spinlock_t		seqlock;
-	struct rcu_head		rcu;
+	union {
+		struct rcu_head		rcu;
+		struct work_struct	work;
+	};
 };
 
 static inline void qdisc_refcount_inc(struct Qdisc *qdisc)
