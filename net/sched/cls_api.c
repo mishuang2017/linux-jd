@@ -1849,16 +1849,12 @@ replay:
 			goto errout;
 		}
 
+		tp_created = 1;
 		tp = tcf_chain_tp_insert_unique(chain, tp_new, protocol, prio);
 
 		if (IS_ERR(tp)) {
 			err = PTR_ERR(tp);
 			goto errout;
-		} else if (tp == tp_new) {
-			/* tp insert function can return another tp instance, if
-			 * it was created concurrently.
-			 */
-			tp_created = 1;
 		}
 	} else {
 		spin_unlock(&chain->filter_chain_lock);
