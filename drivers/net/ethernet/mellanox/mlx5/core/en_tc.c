@@ -3369,7 +3369,6 @@ int mlx5e_configure_flower(struct mlx5e_priv *priv,
 	flow->cookie = f->cookie;
 	atomic_set(&flow->flags, flow_flags);
 	flow->priv = priv;
-	parse_attr->spec.handle = f->common.handle;
 	INIT_LIST_HEAD(&flow->encap);
 	INIT_LIST_HEAD(&flow->mod_hdr);
 	INIT_LIST_HEAD(&flow->hairpin);
