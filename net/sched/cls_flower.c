@@ -1156,7 +1156,7 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 	if (!tc_skip_sw(fnew->flags) && !fold &&
 	    fl_lookup(fnew->mask, &fnew->mkey)) {
 		err = -EEXIST;
-		goto errout_mask;
+		goto errout;
 	}
 
 	spin_lock(&tp->lock);
@@ -1174,7 +1174,7 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 		/* Fold filter was deleted concurrently. Retry lookup. */
 		if (tc_deleted(fold->flags)) {
 			err = -EAGAIN;
-			spin_unlock(&tp->lock);
+			spin_lock(&tp->lock);
 			goto errout_mask;
 		}
 
@@ -1188,7 +1188,7 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 						     &fnew->ht_node,
 						     filter_ht_params);
 			if (err) {
-				spin_unlock(&tp->lock);
+				spin_lock(&tp->lock);
 				goto errout_mask;
 			}
 		}
@@ -1233,12 +1233,11 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 					    1, 0x80000000, GFP_ATOMIC);
 		}
 		if (err) {
-			spin_unlock(&tp->lock);
+			spin_lock(&tp->lock);
 			goto errout_mask;
 		}
 		fnew->handle = idr_index;
 
-		list_add_tail_rcu(&fnew->list, &fnew->mask->filters);
 		if (!tc_skip_sw(fnew->flags)) {
 			struct rhashtable_params filter_ht_params =
 				fnew->mask->filter_ht_params;
@@ -1248,16 +1247,18 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 						     filter_ht_params);
 		}
 		if (err) {
+			spin_lock(&tp->lock);
 			goto errout_idr;
 		}
 
+		list_add_tail_rcu(&fnew->list, &fnew->mask->filters);
 		spin_unlock(&tp->lock);
 	}
 
 	if (!tc_skip_hw(fnew->flags)) {
 		err = fl_hw_replace_filter(tp, fnew, rtnl_held);
 		if (err)
-			goto errout_hw;
+			goto errout_idr;
 	}
 
 	if (!tc_in_hw(fnew->flags))
@@ -1268,21 +1269,12 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 	kfree(tb);
 	return 0;
 
-errout_hw:
-	spin_lock(&tp->lock);
-	if (!tc_skip_sw(fnew->flags)) {
-		struct rhashtable_params filter_ht_params =
-			fnew->mask->filter_ht_params;
-
-		err = rhashtable_remove_fast(&fnew->mask->ht,
-					     &fnew->ht_node,
-					     filter_ht_params);
-	}
 errout_idr:
+	spin_lock(&tp->lock);
 	list_del_rcu(&fnew->list);
+	spin_unlock(&tp->lock);
 	if (!fold)
 		idr_remove_ext(&head->handle_idr, fnew->handle);
-	spin_unlock(&tp->lock);
 errout_mask:
 	fl_mask_put(head, fnew->mask, true);
 errout:
