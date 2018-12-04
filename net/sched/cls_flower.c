@@ -1166,7 +1166,6 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 	 */
 	if (tp->deleting) {
 		err = -EAGAIN;
-		spin_unlock(&tp->lock);
 		goto errout_mask;
 	}
 
