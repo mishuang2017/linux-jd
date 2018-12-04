@@ -125,6 +125,9 @@ struct Qdisc {
 
 	spinlock_t		busylock ____cacheline_aligned_in_smp;
 	spinlock_t		seqlock;
+	int			ifindex; /* cached interface index of parent net
+					  * device
+					  */
 	union {
 		struct rcu_head		rcu;
 		struct work_struct	work;

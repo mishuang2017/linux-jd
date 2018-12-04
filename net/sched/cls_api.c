@@ -1635,7 +1635,7 @@ static int tcf_fill_node(struct net *net, struct sk_buff *skb,
 	tcm->tcm__pad1 = 0;
 	tcm->tcm__pad2 = 0;
 	if (q) {
-		tcm->tcm_ifindex = qdisc_dev(q)->ifindex;
+		tcm->tcm_ifindex = q->ifindex;
 		tcm->tcm_parent = parent;
 	} else {
 		tcm->tcm_ifindex = TCM_IFINDEX_MAGIC_BLOCK;
@@ -2333,7 +2333,7 @@ static int tc_chain_fill_node(const struct tcf_proto_ops *tmplt_ops,
 	tcm->tcm__pad2 = 0;
 	tcm->tcm_handle = 0;
 	if (block->q) {
-		tcm->tcm_ifindex = qdisc_dev(block->q)->ifindex;
+		tcm->tcm_ifindex = block->q->ifindex;
 		tcm->tcm_parent = block->q->handle;
 	} else {
 		tcm->tcm_ifindex = TCM_IFINDEX_MAGIC_BLOCK;
