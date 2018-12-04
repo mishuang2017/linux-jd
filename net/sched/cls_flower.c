@@ -420,9 +420,8 @@ static int __fl_delete(struct tcf_proto *tp, struct cls_fl_filter *f,
 	spin_lock(&tp->lock);
 	if (!tc_deleted(f->flags)) {
 		f->flags |= TCA_CLS_FLAGS_DELETED;
-		if (!tc_skip_sw(f->flags))
-			rhashtable_remove_fast(&f->mask->ht, &f->ht_node,
-					       f->mask->filter_ht_params);
+		rhashtable_remove_fast(&f->mask->ht, &f->ht_node,
+				       f->mask->filter_ht_params);
 		idr_remove_ext(&head->handle_idr, f->handle);
 		list_del_rcu(&f->list);
 		spin_unlock(&tp->lock);
