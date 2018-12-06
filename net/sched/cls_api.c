@@ -1825,6 +1825,11 @@ replay:
 	if (tp == NULL) {
 		struct tcf_proto *tp_new = NULL;
 
+		if (chain->flushing) {
+			err = -EAGAIN;
+			goto errout_locked;
+		}
+
 		/* Proto-tcf does not exist, create new one */
 
 		if (tca[TCA_KIND] == NULL || !protocol) {
@@ -1846,7 +1851,7 @@ replay:
 					  protocol, prio, chain, &rtnl_held);
 		if (IS_ERR(tp_new)) {
 			err = PTR_ERR(tp_new);
-			goto errout;
+			goto errout_tp;
 		}
 
 		tp_created = 1;
@@ -1854,7 +1859,7 @@ replay:
 
 		if (IS_ERR(tp)) {
 			err = PTR_ERR(tp);
-			goto errout;
+			goto errout_tp;
 		}
 	} else {
 		spin_unlock(&chain->filter_chain_lock);
@@ -1899,6 +1904,7 @@ replay:
 errout:
 	if (err && tp_created)
 		tcf_chain_tp_delete_empty(chain, tp, rtnl_held);
+errout_tp:
 	if (chain) {
 		if (tp && !IS_ERR(tp))
 			tcf_proto_put(tp);
