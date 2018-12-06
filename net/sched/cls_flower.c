@@ -1152,11 +1152,6 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 	if (err)
 		goto errout;
 
-	if (!fold && fl_lookup(fnew->mask, &fnew->mkey)) {
-		err = -EEXIST;
-		goto errout_mask;
-	}
-
 	if (!tc_skip_hw(fnew->flags)) {
 		err = fl_hw_replace_filter(tp, fnew, rtnl_held);
 		if (err)
@@ -1212,6 +1207,11 @@ static int fl_change(struct net *net, struct sk_buff *in_skb,
 		refcount_dec(&fold->refcnt);
 		__fl_put(fold);
 	} else {
+		if (fl_lookup(fnew->mask, &fnew->mkey)) {
+			err = -EEXIST;
+			goto errout_hw;
+		}
+
 		if (handle) {
 			/* user specifies a handle and it doesn't exist */
 			err = idr_alloc_ext(&head->handle_idr, fnew, &idr_index,
